@@ -1,0 +1,132 @@
+clear all
+close all
+addpath ../../lib
+load 350pch.mat
+load 350nch.mat
+%%
+f3db = 10e6
+CL = 10e-12
+gm_m1 = 2*f3db*pi*CL
+wu = gm_m1/CL
+fo = gm_m1/(2*pi*CL)
+L = 0.7
+%% GAIN STAGE TRANSISTOR
+%gm_id_m1 = 20
+vds = VDD/2
+%ID_m1 = gm_m1/gm_id_m1
+VCM = 1
+VDD = 3.3
+%VGS = abs(1 - (3.3-3.3/4));
+GM_ID_M1 = lookup(pch, 'GM_ID', 'VGS', abs(VCM-(VDD-VDD/4)), 'VDS', vds, 'L', L)
+JD_m1 = lookup(pch, 'ID_W', 'GM_ID', GM_ID_M1, 'L', L, 'VDS', VDD/2) %JD = ID/W (eq 3.9), we look this value for a specific gm/id value (in this case 15 S/A)
+ID_m1 = (gm_m1/GM_ID_M1)
+W_m1 = ID_m1/JD_m1  
+
+%AVo = -lookup(pch, 'GM_GDS','GM_ID',GM_ID_M1,'VDS',VDD/2,'VSB',0,'L',pch.L)
+%fT = lookup(pch, 'GM_CGG','GM_ID',GM_ID_M1,'VDS',VDD/2,'VSB',0,'L',pch.L)/(2*pi)
+
+    
+%% GM/ID VS L VS FT
+% data ===========================
+JD = logspace(-10,-5,50);     % (A/µm)
+L = [ .4 .7 .8 1];              % (µm)
+GMID = 3;                      % (S/A)
+
+
+% compute ========================
+Av0   = lookup(pch,'GM_GDS','ID_W',JD,'L',L)';
+fT    = 1e-9*lookup(pch,'GM_CGG','ID_W',JD,'L',L)'/(2*pi);
+gm_ID = lookup(pch,'GM_ID','ID_W',JD,'L',L)';
+
+% reference transconductance efficiency
+X1 = GMID*[1 1]; 
+Y1 = [.1 1000]; 
+P = [0 35]; 
+Q = [1 1];
+
+% const transit frequency and gain contours
+[X Y] = meshgrid(JD,pch.L);
+[a1 b1] = contour(X,Y,lookup(pch,'GM_ID','ID_W',JD,'L',pch.L),GMID*[1 1]);
+JD1 = a1(1,2:end)';
+Lx  = a1(2,2:end)';
+fTx = 1e-9*diag(lookup(pch,'GM_CGG','ID_W',JD1,'L',Lx))/(2*pi);
+Avx = diag(lookup(pch,'GM_GDS','ID_W',JD1,'L',Lx));
+
+% mark L
+for k = 1: length(L),
+    fT1(k,1) = interp1(gm_ID(:,k),fT(:,k),3);
+    Av01(k,1) = interp1(gm_ID(:,k),Av0(:,k),3);
+end
+
+
+% plot ==================
+h = figure(1);
+subaxis(1,2,1,'Spacing', 0.07, 'MarginBottom', 0.15, 'MarginTop', 0.02, 'MarginLeft', 0.06, 'MarginRight', 0.02); 
+g1 = semilogy(gm_ID, Av0,'k--', 'linewidth',1); 
+hold;
+g2 = semilogy(gm_ID, fT, 'k', 'linewidth',1); 
+semilogy(3,fT1,'ko',3,Av01,'ks', 'linewidth', 1.05, 'markersize',7);
+semilogy(X1,Y1,'k','linewidth',2);
+
+xlabel({'{\itg_m}/{\itI_D}  (S/A)';'(a)'});  
+legend([g1(1) g2(2)], {'|{\itA_v_0}|', '{\itf_T} (GHz)'}, 'location', 'northwest');
+axis([0 35 .1 1000]); 
+grid;
+set(gca, 'yminorgrid', 'off');
+text(18,18,'{\itL} = 0.1µm', 'fontsize',9);
+text(21,270,'{\itL} = 1µm','fontsize',9);
+text(2,.6,'{\itL} = 1µm','fontsize',9);
+
+subaxis(1,2,2);
+semilogy(Lx,Avx,'k--',Lx,fTx,'k','linewidth',1); 
+hold;
+semilogy(L,fT1,'ko',L,Av01,'ks', 'linewidth', 1.05, 'markersize', 7);
+axis([0 1.05 .1 1000]); 
+set(gca, 'xtick', [0:0.2:1], 'yminorgrid', 'off');
+xlabel({'{\itL}  (µm)';'(b)'}); grid; hold
+legend('{|\itA_v_0|}', '{\itf_T} (GHz)', 'location', 'northwest');
+
+%% M7
+gm_id_m7 = 5
+vds = abs((VDD-VDD/4)-1.65)
+ID_m7 = ID_m1
+gm_m7 = ID_m7 * gm_id_m7
+JD_m7 = lookup(pch, 'ID_W', 'GM_ID', gm_id_m7, 'L', L, 'VDS', vds, 'VSB', 0)
+W_m7 = ID_m7/JD_m7 
+VGS_m7 = lookupVGS(pch, 'GM_ID', gm_id_m7, 'VDS', vds, 'L', L, 'VSB', 0)
+
+%JD_m7 = lookup(pch, 'ID_W', 'GM_ID', gm_id_m7, 'L', L*2, 'VDS', vds, 'VSB', 0,'VGS', [VGS_m7-0.5 VGS_m7+0.5])
+%W_m7 = ID_m7/JD_m7 
+%% M3
+gm_id_m3 = 5
+vds = 1
+ID_m3 = ID_m1
+gm_m3 = ID_m3 * gm_id_m3
+JD_m3 = lookup(pch, 'ID_W', 'GM_ID', gm_id_m3, 'L', L, 'VDS', VDD-VDD/4-VDD/2, 'VSB', 0)
+W_m3 = ID_m3/JD_m3 
+VGS_m3 = lookupVGS(nch, 'GM_ID', gm_id_m3, 'VDS', vds, 'L', L, 'VSB', 0)
+
+%JD_m3 = lookup(pch, 'ID_W', 'GM_ID', gm_id_m3, 'L', L*2, 'VDS', vds, 'VSB', 0,'VGS', [VGS_m3-0.5 VGS_m3+0.5])
+%W_m3 = ID_m3/JD_m3
+%% M5
+gm_id_m5 = 5
+vds = 3.3/4
+ID_m5 = ID_m1
+gm_m5 = ID_m5 * gm_id_m5
+JD_m5 = lookup(nch, 'ID_W', 'GM_ID', gm_id_m5, 'L', L, 'VDS', vds, 'VSB', 0)
+W_m5 = ID_m5/JD_m5 
+VGS_m5 = lookupVGS(nch, 'GM_ID', gm_id_m5, 'VDS', vds, 'L', L, 'VSB', 0)
+
+%JD_m5 = lookup(pch, 'ID_W', 'GM_ID', gm_id_m5, 'L', L*2, 'VDS', vds, 'VSB', 0,'VGS', [VGS_m5-0.5 VGS_m5+0.5])
+%W_m5 = ID_m5/JD_m5
+%% M10
+gm_id_m10 = 5
+vds = 3.3/4
+ID_m10 = ID_m1*2
+gm_m10 = ID_m10 * gm_id_m10
+JD_m10 = lookup(nch, 'ID_W', 'GM_ID', gm_id_m10, 'L', L, 'VDS', vds, 'VSB', 0)
+W_m10 = ID_m10/JD_m10 
+VGS_m10 = lookupVGS(nch, 'GM_ID', gm_id_m10, 'VDS', vds, 'L', L, 'VSB', 0)
+
+%JD_m10 = lookup(pch, 'ID_W', 'GM_ID', gm_id_m5, 'L', L*2, 'VDS', vds, 'VSB', 0,'VGS', [VGS_m10-0.5 VGS_m10+0.5])
+%W_m10 = ID_m10/JD_m10
